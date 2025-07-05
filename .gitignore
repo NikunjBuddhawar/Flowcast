@@ -1,0 +1,44 @@
+# --- Python cache and build files ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# --- Conda / virtual environments ---
+.venv/
+venv/
+env/
+tf_env/
+
+# --- Jupyter Notebooks ---
+*.ipynb
+.ipynb_checkpoints/
+
+# --- SQLite Databases ---
+*.db
+
+# --- Machine Learning Models ---
+*.pkl
+*.joblib
+*.h5
+*.pt
+*.onnx
+
+# --- Streamlit Secrets ---
+.streamlit/secrets.toml
+
+# --- Logs and Runtime Files ---
+*.log
+runtime.txt
+
+# --- Editor and OS files ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Misc ---
+*.bak
+*.swp
+*.tmp
