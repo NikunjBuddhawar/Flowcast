@@ -89,7 +89,7 @@ weather = "your-weather-api-key"
 holiday = "your-holiday-api-key"
 ```
 
-## 5. Runn the App
+## 5. Run the App
 
 ```bash
 streamlit run Auth.py
@@ -97,40 +97,26 @@ streamlit run Auth.py
 
 ---
 
-
-## Folder Structure 
-
-.
-├── Auth.py                     # Login / Signup entry point
-├── pages/
-│   ├── App.py                  # Retailer dashboard
-│   └── Forecast.py             # User-side forecast and cart view
-├── model.pkl                   # Trained pricing model
-├── retail_forecasts.db         # Forecast DB (ignored in git)(will be created automatically)
-├── users.db                    # User + cart data (ignored in git)(will be created automatically)
-├── requirements.txt
-├── .streamlit/
-│   └── secrets.toml            # API keys (ignored in git)
-├── README.md
-└── .gitignore
+<pre><code>## 📁 Folder Structure ``` smart-retail/ ├── Auth.py # Login / Signup entry point ├── pages/ │ ├── App.py # Retailer dashboard │ └── Forecast.py # User-side forecast and cart view ├── model.pkl # Trained pricing model ├── retail_forecasts.db # Forecast DB (auto-generated, gitignored) ├── users.db # User + cart data (auto-generated, gitignored) ├── requirements.txt # Python dependencies ├── runtime.txt # Python version for Streamlit Cloud ├── .gitignore ├── .streamlit/ │ └── secrets.toml # API keys (gitignored) └── README.md ``` </code></pre>
 
 ---
 
 
-## Data Flow 
+## 🔄 System Data Flow
 
+```mermaid
 graph TD
-    A[Login / Sign Up] --> B{Role}
-    B -->|User| --> C[Forecast Page]
-    B -->|Retailer| --> D[Retailer Dashboard]
-    C --> E[Fetch Forecast from DB]
-    C --> F[Cart & Lock Price]
-    D --> G[Configure APIs & Models]
-    C --> H[Insights from Model]
-
+    A[🔐 Login / Sign Up] --> B{👥 Role}
+    B -->|User| C[📊 Forecast Page]
+    B -->|Retailer| D[📈 Retailer Dashboard]
+    C --> E[📦 Fetch Forecast from DB]
+    C --> F[🛒 Cart / Lock Price]
+    D --> G[⚙️ Configure APIs & Model]
+    C --> H[🧠 SHAP-Based Explainable Insights]
+```
 ---
 
----
+
 
 ## 🌟 Benefits
 
