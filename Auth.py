@@ -60,7 +60,7 @@ if st.session_state.get("logged_in"):
 
     # Redirect immediately
     if st.session_state.role == "User":
-        st.switch_page("pages/forecast.py")
+        st.switch_page("pages/Forecast.py")
     else:
         st.switch_page("pages/App.py")
 
