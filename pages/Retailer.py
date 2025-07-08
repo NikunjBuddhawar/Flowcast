@@ -9,14 +9,13 @@ import requests
 import shap
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
 import warnings
-from dotenv import load_dotenv
 import os
 
 warnings.simplefilter('ignore', ConvergenceWarning)
 shap.initjs()
 
-load_dotenv()
-INDIA_HOLIDAY_API_KEY = os.getenv("INDIA_HOLIDAY_API_KEY")
+
+INDIA_HOLIDAY_API_KEY = st.secrets["INDIA_HOLIDAY_API_KEY"]
 
 
 # --- Access Control ---
