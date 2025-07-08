@@ -9,19 +9,27 @@ import requests
 import shap
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
 import warnings
-
+from dotenv import load_dotenv
+import os
 
 warnings.simplefilter('ignore', ConvergenceWarning)
 shap.initjs()
 
+load_dotenv()
+INDIA_HOLIDAY_API_KEY = os.getenv("INDIA_HOLIDAY_API_KEY")
+
+
 # --- Access Control ---
-st.set_page_config(page_title="Dynamic Pricing Predictor", layout="centered")
+st.set_page_config(page_title="Flowcast", layout="centered")
+st.title("📊 Flowcast")
+
 if "logged_in" not in st.session_state or not st.session_state.logged_in:
-    st.markdown("## 🚫 Access Denied. Please log in.")
+    st.error("Access Denied. Please log in from the Auth page.")
     st.stop()
 elif st.session_state.role != "Retailer":
-    st.markdown("## 🚫 Access Denied. This page is for Retailers only.")
+    st.error("Access Denied. This page is for Users only.")
     st.stop()
+
 
 # --- Sidebar Logout ---
 with st.sidebar:
@@ -31,37 +39,78 @@ with st.sidebar:
             st.session_state.pop(key, None)
         st.switch_page("auth.py")
 
-# --- Weather API ---
-def get_weatherapi_forecast(city, api_key):
-    url = f"http://api.weatherapi.com/v1/forecast.json?key={api_key}&q={city}&days=3&aqi=no&alerts=no"
-    res = requests.get(url)
-    if res.status_code != 200:
-        raise Exception("WeatherAPI error or invalid city.")
-    data = res.json()
-    return pd.DataFrame({
-        "forecast_day": [datetime.datetime.strptime(d["date"], "%Y-%m-%d").date() for d in data["forecast"]["forecastday"]],
-        "temp": [d["day"]["avgtemp_c"] for d in data["forecast"]["forecastday"]],
-        "rain": [d["day"]["totalprecip_mm"] for d in data["forecast"]["forecastday"]]
-    })
+# --- Open-Meteo 12-day Forecast ---
+def get_openmeteo_forecast(city_name):
+    city_coords = {
+        "Mumbai": (19.0760, 72.8777),
+        "Delhi": (28.6139, 77.2090),
+        "Bangalore": (12.9716, 77.5946),
+        "New York": (40.7128, -74.0060),
+        "Toronto": (43.651070, -79.347015)
+    }
 
-# --- Holiday API ---
-def get_calendarific_holidays(country_code, start_date, days, api_key):
+    if city_name not in city_coords:
+        st.warning("⚠️ Unsupported city for Open-Meteo forecast.")
+        return pd.DataFrame()
+
+    lat, lon = city_coords[city_name]
+    url = (
+        f"https://api.open-meteo.com/v1/forecast?"
+        f"latitude={lat}&longitude={lon}&daily=temperature_2m_max,precipitation_sum"
+        f"&timezone=auto&forecast_days=12"
+    )
     try:
-        url = "https://calendarific.com/api/v2/holidays"
-        res = requests.get(url, params={
-            "api_key": api_key,
-            "country": country_code,
-            "year": start_date.year,
-            "type": "national"
-        })
+        res = requests.get(url)
         res.raise_for_status()
-        holidays = [datetime.datetime.strptime(h["date"]["iso"], "%Y-%m-%d").date()
-                    for h in res.json()["response"]["holidays"]]
+        data = res.json()
+
+        df = pd.DataFrame({
+            "forecast_day": pd.to_datetime(data["daily"]["time"]).date,
+            "temp": data["daily"]["temperature_2m_max"],
+            "rain": data["daily"]["precipitation_sum"]
+        })
+        return df
+
+    except Exception as e:
+        st.warning(f"⚠️ Open-Meteo API error: {e}")
+        return pd.DataFrame()
+
+# --- Indian Govt. + Weekend Holidays ---
+def get_combined_holidays(api_key, state="MAHARASHTRA", year="2025", start_date=None, days=12):
+    try:
+        url = "https://api.data.gov.in/resource/9b6c3d6a-3ab5-4a4a-872b-197b19886a18"
+        params = {"api-key": api_key, "format": "json"}
+        res = requests.get(url, params=params)
+        res.raise_for_status()
+        records = res.json().get("records", [])
+
+        holiday_dates = set()
+        for record in records:
+            rec_state = record.get("state", "").strip().upper()
+            rec_year = str(record.get("year", "")).strip()
+            if rec_state != state.strip().upper() or rec_year != year:
+                continue
+            date_str = record.get("date", "")
+            try:
+                date_obj = datetime.datetime.strptime(date_str, "%d-%m-%Y").date()
+                holiday_dates.add(date_obj)
+            except:
+                continue
+
         forecast_days = [start_date + datetime.timedelta(days=i) for i in range(days)]
-        return pd.Series([1 if day in holidays else 0 for day in forecast_days], index=forecast_days)
+
+        # Add weekends as holidays
+        full_holidays = [1 if d in holiday_dates or d.weekday() in [5, 6] else 0 for d in forecast_days]
+
+        st.info(f"📅 Holidays for {state}, {year}:\n" +
+                f"{[str(d) for d in forecast_days if d in holiday_dates or d.weekday() in [5,6]]}")
+
+        return pd.Series(full_holidays, index=forecast_days)
+
     except Exception as e:
         st.warning(f"⚠️ Holiday API error: {e}")
-        return pd.Series([0] * days, index=[start_date + datetime.timedelta(days=i) for i in range(days)])
+        return pd.Series([1 if (start_date + datetime.timedelta(days=i)).weekday() in [5,6] else 0 for i in range(days)],
+                         index=[start_date + datetime.timedelta(days=i) for i in range(days)])
 
 # --- UI ---
 st.title("📊 Dynamic Price Predictor (Retailer Panel)")
@@ -69,11 +118,12 @@ st.sidebar.header("🛠️ Input Conditions")
 
 category = st.sidebar.selectbox("Category", ["Vegetables", "Fruits", "Dairy"])
 product = st.sidebar.text_input("Product Name", "Tomato")
-city = st.sidebar.text_input("City", "Mumbai")
+city = st.sidebar.selectbox("City", ["Mumbai", "Delhi", "Bangalore", "New York", "Toronto"])
+state_name = st.sidebar.selectbox("Indian State (for holidays)", ["Maharashtra", "Delhi", "Karnataka"])
 stock = st.sidebar.slider("Stock", 10, 200, 100)
 discount = st.sidebar.slider("Discount", 0.0, 1.0, 0.2)
 
-# Dynamically adjust expiry range for Dairy
+# Expiry Input
 if category == "Dairy":
     days_to_expiry = st.sidebar.slider("Days to Expiry", 0.0, 10.0, 3.0)
 else:
@@ -85,41 +135,45 @@ submit = st.sidebar.button("💡 Predict & Save")
 # --- Main Logic ---
 if submit:
     try:
-        weather_api_key = st.secrets["api_keys"]["weather"]
-        holiday_api_key = st.secrets["api_keys"]["holiday"]
         start_day = datetime.date.today()
 
-        # Fetch weather
-        weather_df = get_weatherapi_forecast(city, api_key=weather_api_key)
-        weather_df = pd.concat([weather_df] * 4, ignore_index=True).head(10)
-        weather_df["forecast_day"] = pd.date_range(datetime.date.today(), periods=10)
+        # Weather
+        weather_df = get_openmeteo_forecast(city)
 
-        # Fetch holidays
-        city_country_map = {"Mumbai": "IN", "Delhi": "IN", "Bangalore": "IN", "New York": "US", "Toronto": "CA"}
-        country = city_country_map.get(city, "IN")
-        holiday_series = get_calendarific_holidays(country, start_day, 10, holiday_api_key)
+        # Holidays
+        if city in ["Mumbai", "Delhi", "Bangalore"]:
+            holiday_series = get_combined_holidays(
+                api_key=INDIA_HOLIDAY_API_KEY,
+                state=state_name,
+                year=str(start_day.year),
+                start_date=start_day,
+                days=12
+            )
+        else:
+            holiday_series = pd.Series([0] * 12, index=[start_day + datetime.timedelta(days=i) for i in range(12)])
 
-        if len(weather_df) < 10 or len(holiday_series) < 10:
-            st.error("❌ Insufficient forecast data from APIs.")
+        if len(weather_df) < 12 or len(holiday_series) < 12:
+            st.error("❌ Insufficient forecast data.")
             st.stop()
 
-        # Build Input DF
+        weather_df["forecast_day"] = pd.date_range(datetime.date.today(), periods=12)
+
+        # Input DF
         input_df = pd.DataFrame({
-            "stock_level": [stock] * 10,
-            "discount": [discount] * 10,
-            "days_to_expiry": [max(days_to_expiry - i, 0) for i in range(10)],
-            "temperature": weather_df["temp"],
-            "rain": weather_df["rain"],
+            "stock_level": [stock] * 12,
+            "discount": [discount] * 12,
+            "days_to_expiry": [max(days_to_expiry - i, 0) for i in range(12)],
+            "temperature": weather_df["temp"].values,
+            "rain": weather_df["rain"].values,
             "holiday": holiday_series.values,
             "forecast_day": weather_df["forecast_day"].values,
-            "mrp": [mrp] * 10
+            "mrp": [mrp] * 12
         })
 
-        # Load model and predict
         with open("model.pkl", "rb") as f:
             model = pickle.load(f)
 
-        # Add required features
+        # Features
         input_df["stock_expiry_ratio"] = input_df["stock_level"] / (input_df["days_to_expiry"] + 1)
         input_df["rain_temp_interaction"] = input_df["rain"] * input_df["temperature"]
 
@@ -128,42 +182,35 @@ if submit:
 
         predicted_multipliers = model.predict(input_df[features])
 
-
-        # 🧠 Set minimum allowed price as 70% of MRP
         min_multiplier = 0.60
         min_price = min_multiplier * input_df["mrp"]
 
-        # Dairy expiry condition
         if category == "Dairy":
             forecasted = predicted_multipliers * input_df["mrp"]
             forecasted = np.where(input_df["days_to_expiry"] > 0, forecasted, 0.0)
         else:
             forecasted = np.minimum(predicted_multipliers * input_df["mrp"], input_df["mrp"])
 
-        # 🛡️ Apply minimum price floor
         input_df["forecasted_price"] = np.maximum(forecasted, min_price)
-
         input_df["category"] = category
         input_df["product"] = product
 
-        # SHAP Explainability
+        # SHAP
         explainer = shap.Explainer(model)
         shap_values = explainer(input_df[features])
 
         st.subheader("🧬 Feature Importance (SHAP)")
         fig, ax = plt.subplots()
         shap.summary_plot(shap_values, input_df[features], plot_type="bar", show=False)
-        plt.xlabel("Mean |SHAP value|")
-        plt.tight_layout()
-        st.pyplot(plt.gcf())  
+        st.pyplot(plt.gcf())
 
-        st.subheader("🧠 Feature Impact (SHAP) for Day 1 Prediction")
+        st.subheader("🧠 SHAP Breakdown for Day 1")
         fig = shap.plots._waterfall.waterfall_legacy(
             explainer.expected_value, shap_values.values[0], feature_names=features, show=False
         )
         st.pyplot(fig)
 
-        # Save to DB
+        # DB Save
         conn = sqlite3.connect("retail_forecasts.db")
         cursor = conn.cursor()
         cursor.execute("""CREATE TABLE IF NOT EXISTS forecasts (

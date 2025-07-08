@@ -8,7 +8,8 @@ from datetime import timedelta
 import os
 import sqlite3
 
-st.set_page_config(page_title="10-Day Smart Forecast", layout="wide")
+st.set_page_config(page_title="Flowcast", layout="wide")
+st.title("📊 Flowcast")
 
 # --- Access Control ---
 if "logged_in" not in st.session_state or not st.session_state.logged_in:
@@ -22,6 +23,7 @@ elif st.session_state.role != "User":
 def setup_user_db():
     conn = sqlite3.connect("retail_forecasts.db")
     cursor = conn.cursor()
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS user_cart (
             username TEXT,
@@ -36,7 +38,6 @@ def setup_user_db():
     conn.close()
 
 setup_user_db()
-
 
 def save_user_cart(username):
     conn = sqlite3.connect("retail_forecasts.db")
@@ -57,6 +58,7 @@ def save_user_cart(username):
             """, (username, cat, prod, qty))
     conn.commit()
     conn.close()
+
 
 # --- Sidebar Logout ---
 with st.sidebar:

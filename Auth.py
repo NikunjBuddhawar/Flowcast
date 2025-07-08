@@ -49,7 +49,8 @@ if "auth_mode" not in st.session_state:
 
 # ---------- PAGE SETUP ----------
 st.set_page_config(page_title="Login Portal", layout="centered")
-st.title("🔐 Welcome to the Portal")
+st.title("📊 Flowcast")
+st.header("🔐 Welcome to the Portal")
 
 # ---------- IF LOGGED IN: Prevent Access to Auth ----------
 if st.session_state.get("logged_in"):
@@ -60,9 +61,9 @@ if st.session_state.get("logged_in"):
 
     # Redirect immediately
     if st.session_state.role == "User":
-        st.switch_page("pages/Forecast.py")
+        st.switch_page("pages/User.py")
     else:
-        st.switch_page("pages/App.py")
+        st.switch_page("pages/Retailer.py")
 
     # Prevent rest of page from rendering
     st.stop()

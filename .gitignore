@@ -19,11 +19,11 @@ tf_env/
 *.db
 
 # --- Machine Learning Models ---
-*.pkl
 *.joblib
 *.h5
 *.pt
 *.onnx
+!model.pkl  # explicitly keep model.pkl
 
 # --- Streamlit Secrets ---
 .streamlit/secrets.toml
@@ -42,3 +42,7 @@ Thumbs.db
 *.bak
 *.swp
 *.tmp
+
+
+# --- .env ---
+.env
