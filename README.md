@@ -97,7 +97,23 @@ streamlit run Auth.py
 
 ---
 
-<pre><code>## 📁 Folder Structure ``` smart-retail/ ├── Auth.py # Login / Signup entry point ├── pages/ │ ├── App.py # Retailer dashboard │ └── Forecast.py # User-side forecast and cart view ├── model.pkl # Trained pricing model ├── retail_forecasts.db # Forecast DB (auto-generated, gitignored) ├── users.db # User + cart data (auto-generated, gitignored) ├── requirements.txt # Python dependencies ├── runtime.txt # Python version for Streamlit Cloud ├── .gitignore ├── .streamlit/ │ └── secrets.toml # API keys (gitignored) └── README.md ``` </code></pre>
+## Project Structure 
+```text
+.
+├── .env                      # Environment variables (usually ignored by Git)
+├── .gitignore                # Git ignored files and folders
+├── Auth.py                   # Authentication logic
+├── E1.ipynb                  # Jupyter Notebook (probably for exploration or prototyping)
+├── model.pkl                 # Trained machine learning model (pickle file)
+├── README.md                 # Project documentation
+├── requirements.txt          # Python dependencies for the project
+├── retail_forecasts.db       # Retail forecast SQLite database
+├── runtime.txt               # Specifies Python runtime version for deployment
+├── users.db                  # User data in SQLite format
+├── pages/                    # Streamlit multi-page app folder
+│   ├── Retailer.py           # Retailer dashboard logic
+│   └── User.py               # User dashboard or view logic
+```
 
 ---
 

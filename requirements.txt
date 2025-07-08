@@ -122,7 +122,7 @@ python-dateutil
 python-dotenv==1.1.1
 pytimeparse==1.1.8
 pytz==2025.2
-pywin32==308
+
 pyzmq
 referencing==0.36.2
 regex==2024.11.6

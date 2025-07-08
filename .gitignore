@@ -15,8 +15,7 @@ tf_env/
 *.ipynb
 .ipynb_checkpoints/
 
-# --- SQLite Databases ---
-*.db
+
 
 # --- Machine Learning Models ---
 *.joblib
