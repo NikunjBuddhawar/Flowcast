@@ -20,7 +20,7 @@ INDIA_HOLIDAY_API_KEY = st.secrets["INDIA_HOLIDAY_API_KEY"]
 
 # --- Access Control ---
 st.set_page_config(page_title="Flowcast", layout="centered")
-st.title("📊 Flowcast")
+st.title("Flowcast")
 
 if "logged_in" not in st.session_state or not st.session_state.logged_in:
     st.error("Access Denied. Please log in from the Auth page.")

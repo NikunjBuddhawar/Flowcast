@@ -49,7 +49,7 @@ if "auth_mode" not in st.session_state:
 
 # ---------- PAGE SETUP ----------
 st.set_page_config(page_title="Login Portal", layout="centered")
-st.title("📊 Flowcast")
+st.title("Flowcast")
 st.header("🔐 Welcome to the Portal")
 
 # ---------- IF LOGGED IN: Prevent Access to Auth ----------

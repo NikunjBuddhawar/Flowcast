@@ -9,7 +9,7 @@ import os
 import sqlite3
 
 st.set_page_config(page_title="Flowcast", layout="wide")
-st.title("📊 Flowcast")
+st.title("Flowcast")
 
 # --- Access Control ---
 if "logged_in" not in st.session_state or not st.session_state.logged_in:
@@ -23,7 +23,6 @@ elif st.session_state.role != "User":
 def setup_user_db():
     conn = sqlite3.connect("retail_forecasts.db")
     cursor = conn.cursor()
-
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS user_cart (
             username TEXT,
@@ -59,24 +58,22 @@ def save_user_cart(username):
     conn.commit()
     conn.close()
 
-
 # --- Sidebar Logout ---
 with st.sidebar:
     st.markdown(f"**👤 {st.session_state.name} ({st.session_state.role})**")
     if st.button("🔓 Logout"):
-        save_user_cart(st.session_state["username"])  # Save before logout
+        save_user_cart(st.session_state["username"])
         for key in ["logged_in", "username", "role", "name", "auth_mode", "cart", "locked_prices", "lock_status"]:
             st.session_state.pop(key, None)
         st.switch_page("Auth.py")
 
 # --- Title and Description ---
-st.title("🧠 10-Day Dynamic Price Forecast")
+st.title("🧐 10-Day Dynamic Price Forecast")
 st.markdown("""
 This tool shows forecasted **optimal prices** for products set by retailers:
-- 📈 10-day forecast from retailer's model
-- 🧠 Reason-based explanation for low prices
+- 📆 Forecast insights are based on the first 3 days of retailer-generated price predictions.
+- 🧐 Reason-based explanation for low prices
 - 🛒 Add multiple products to cart with quantity
-- 🔔 WhatsApp alerts coming soon
 """)
 
 # --- Load Forecasts from SQLite ---
@@ -119,8 +116,6 @@ def load_user_session_cart(username):
             lock_status[(cat, prod)] = True
     return cart, locked_prices, lock_status
 
-
-
 # --- Initialize Session State ---
 if "cart" not in st.session_state:
     username = st.session_state.get("username", "unknown")
@@ -149,7 +144,6 @@ categories = sorted(products_df["category"].unique())
 category = st.sidebar.selectbox("📦 Select Category", categories)
 filtered_products = products_df[products_df["category"] == category]["product"].unique()
 product = st.sidebar.selectbox("🍅 Select Product", sorted(filtered_products))
-price_threshold = st.sidebar.number_input("Notify me if price drops below (₹)", 1.0, 500.0, 30.0)
 
 # --- Generate Forecast and Add to Cart Buttons ---
 col_gen, col_add = st.sidebar.columns([1, 1])
@@ -187,8 +181,24 @@ if st.session_state.latest_forecast is not None:
     if is_dairy:
         df = df[df["forecasted_price"] > 0]
 
+    # 🔐 Use index to filter dates since 'forecast_day' is already the index
     today = pd.Timestamp.today().normalize()
+    if "forecast_day" in df.columns:
+        df.set_index("forecast_day", inplace=True)
     rolling_df = df[df.index >= today].copy().head(3)
+
+    # 🛠 Ensure columns exist — fetch full version if needed
+    required_cols = ["discount", "stock", "days_to_expiry", "rain", "temperature", "holiday"]
+    missing_cols = [col for col in required_cols if col not in rolling_df.columns]
+
+    if missing_cols:
+        df_full = fetch_prediction(selected_category, product)
+        df_full["forecast_day"] = pd.to_datetime(df_full["forecast_day"], errors='coerce')
+        df_full.rename(columns={"temp": "temperature"}, inplace=True)
+        df_full.set_index("forecast_day", inplace=True)
+        if is_dairy:
+            df_full = df_full[df_full["forecasted_price"] > 0]
+        rolling_df = df_full[df_full.index >= today].copy().head(3)
 
     if rolling_df.empty:
         st.warning("⚠️ No valid forecasted prices available.")
@@ -232,18 +242,20 @@ if st.session_state.latest_forecast is not None:
         try:
             day_data = rolling_df.loc[best_day]
             insights = []
-            if "discount" in rolling_df.columns and day_data["discount"] > 0.2:
+
+            if "discount" in day_data and day_data["discount"] > 0.2:
                 insights.append("🟢 Retailer is offering a high discount.")
-            if "stock" in rolling_df.columns and day_data["stock"] > 150:
+            if "stock" in day_data and day_data["stock"] > 150:
                 insights.append("🔴 Stock is in excess, likely causing markdowns.")
-            if "days_to_expiry" in rolling_df.columns and day_data["days_to_expiry"] < 5:
+            if "days_to_expiry" in day_data and day_data["days_to_expiry"] < 5:
                 insights.append("🟡 Product is nearing expiry.")
-            if "rain" in rolling_df.columns and day_data["rain"] > 8:
+            if "rain" in day_data and day_data["rain"] > 8:
                 insights.append("🟡 Rain may reduce foot traffic or demand.")
-            if "temperature" in rolling_df.columns and (day_data["temperature"] < 10 or day_data["temperature"] > 35):
+            if "temperature" in day_data and (day_data["temperature"] < 10 or day_data["temperature"] > 35):
                 insights.append("🟡 Extreme temperatures predicted on that day.")
-            if "holiday" in rolling_df.columns and day_data["holiday"] == 1:
+            if "holiday" in day_data and day_data["holiday"] == 1:
                 insights.append("🟢 Holiday pricing behavior has been applied.")
+
             if not insights:
                 insights.append("ℹ️ Standard price adjustment by the retailer.")
 
@@ -323,7 +335,9 @@ with st.sidebar.expander("🛒 View Cart & Best Buy Window", expanded=True):
         if not total_df.empty:
             total_df["forecast_day"] = pd.to_datetime(total_df["forecast_day"], errors='coerce')
             if product_days:
-                common_days = set.intersection(*product_days.values())
+                today = pd.Timestamp.today().normalize()
+                forecast_window = pd.date_range(start=today, periods=3)
+                common_days = set.intersection(*product_days.values(), set(forecast_window))
                 filtered_df = total_df[total_df["forecast_day"].isin(common_days)]
                 if not filtered_df.empty:
                     grouped = filtered_df.groupby("forecast_day")["forecasted_price"].sum()
