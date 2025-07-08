@@ -37,7 +37,7 @@ with st.sidebar:
     if st.button("🔓 Logout"):
         for key in ["logged_in", "username", "role", "name", "auth_mode"]:
             st.session_state.pop(key, None)
-        st.switch_page("auth.py")
+        st.switch_page("Auth.py")
 
 # --- Open-Meteo 12-day Forecast ---
 def get_openmeteo_forecast(city_name):

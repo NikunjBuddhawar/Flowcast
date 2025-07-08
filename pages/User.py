@@ -67,7 +67,7 @@ with st.sidebar:
         save_user_cart(st.session_state["username"])  # Save before logout
         for key in ["logged_in", "username", "role", "name", "auth_mode", "cart", "locked_prices", "lock_status"]:
             st.session_state.pop(key, None)
-        st.switch_page("auth.py")
+        st.switch_page("Auth.py")
 
 # --- Title and Description ---
 st.title("🧠 10-Day Dynamic Price Forecast")
