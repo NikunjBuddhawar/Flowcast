@@ -14,9 +14,7 @@ import os
 warnings.simplefilter('ignore', ConvergenceWarning)
 shap.initjs()
 
-
 INDIA_HOLIDAY_API_KEY = st.secrets["INDIA_HOLIDAY_API_KEY"]
-
 
 # --- Access Control ---
 st.set_page_config(page_title="Flowcast", layout="centered")
@@ -29,7 +27,6 @@ elif st.session_state.role != "Retailer":
     st.error("Access Denied. This page is for Users only.")
     st.stop()
 
-
 # --- Sidebar Logout ---
 with st.sidebar:
     st.markdown(f"**👤 {st.session_state.name} ({st.session_state.role})**")
@@ -38,21 +35,43 @@ with st.sidebar:
             st.session_state.pop(key, None)
         st.switch_page("Auth.py")
 
+# --- Dynamic Geocoding ---
+def get_city_coordinates(city_name):
+    try:
+        geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={city_name}&count=1&language=en&format=json"
+        res = requests.get(geo_url)
+        res.raise_for_status()
+        results = res.json().get("results")
+        if results:
+            return results[0]["latitude"], results[0]["longitude"]
+        else:
+            return None
+    except Exception as e:
+        st.warning(f"⚠️ Geocoding error: {e}")
+        return None
+
+# --- Validate City–State Match ---
+def validate_state_matches_city(city_name, selected_state):
+    try:
+        geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={city_name}&count=1&language=en&format=json"
+        res = requests.get(geo_url)
+        res.raise_for_status()
+        results = res.json().get("results")
+        if not results:
+            return False, "City not found."
+        city_info = results[0]
+        detected_state = city_info.get("admin1", "").strip().lower()
+        return (detected_state == selected_state.strip().lower()), detected_state
+    except:
+        return False, "Error in city validation."
+
 # --- Open-Meteo 12-day Forecast ---
 def get_openmeteo_forecast(city_name):
-    city_coords = {
-        "Mumbai": (19.0760, 72.8777),
-        "Delhi": (28.6139, 77.2090),
-        "Bangalore": (12.9716, 77.5946),
-        "New York": (40.7128, -74.0060),
-        "Toronto": (43.651070, -79.347015)
-    }
-
-    if city_name not in city_coords:
-        st.warning("⚠️ Unsupported city for Open-Meteo forecast.")
+    coords = get_city_coordinates(city_name)
+    if not coords:
+        st.warning("⚠️ Could not fetch coordinates for the city.")
         return pd.DataFrame()
-
-    lat, lon = city_coords[city_name]
+    lat, lon = coords
     url = (
         f"https://api.open-meteo.com/v1/forecast?"
         f"latitude={lat}&longitude={lon}&daily=temperature_2m_max,precipitation_sum"
@@ -62,14 +81,12 @@ def get_openmeteo_forecast(city_name):
         res = requests.get(url)
         res.raise_for_status()
         data = res.json()
-
         df = pd.DataFrame({
             "forecast_day": pd.to_datetime(data["daily"]["time"]).date,
             "temp": data["daily"]["temperature_2m_max"],
             "rain": data["daily"]["precipitation_sum"]
         })
         return df
-
     except Exception as e:
         st.warning(f"⚠️ Open-Meteo API error: {e}")
         return pd.DataFrame()
@@ -97,15 +114,9 @@ def get_combined_holidays(api_key, state="MAHARASHTRA", year="2025", start_date=
                 continue
 
         forecast_days = [start_date + datetime.timedelta(days=i) for i in range(days)]
-
-        # Add weekends as holidays
         full_holidays = [1 if d in holiday_dates or d.weekday() in [5, 6] else 0 for d in forecast_days]
 
-        st.info(f"📅 Holidays for {state}, {year}:\n" +
-                f"{[str(d) for d in forecast_days if d in holiday_dates or d.weekday() in [5,6]]}")
-
         return pd.Series(full_holidays, index=forecast_days)
-
     except Exception as e:
         st.warning(f"⚠️ Holiday API error: {e}")
         return pd.Series([1 if (start_date + datetime.timedelta(days=i)).weekday() in [5,6] else 0 for i in range(days)],
@@ -117,39 +128,40 @@ st.sidebar.header("🛠️ Input Conditions")
 
 category = st.sidebar.selectbox("Category", ["Vegetables", "Fruits", "Dairy"])
 product = st.sidebar.text_input("Product Name", "Tomato")
-city = st.sidebar.selectbox("City", ["Mumbai", "Delhi", "Bangalore", "New York", "Toronto"])
-state_name = st.sidebar.selectbox("Indian State (for holidays)", ["Maharashtra", "Delhi", "Karnataka"])
+city = st.sidebar.text_input("City", "Mumbai")
+
+indian_states = sorted([
+    "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", "Haryana",
+    "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur",
+    "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana",
+    "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal", "Andaman and Nicobar Islands", "Chandigarh",
+    "Dadra and Nagar Haveli and Daman and Diu", "Delhi", "Jammu and Kashmir", "Ladakh", "Lakshadweep", "Puducherry"
+])
+state_name = st.sidebar.selectbox("Indian State (for holidays)", indian_states)
+
 stock = st.sidebar.slider("Stock", 10, 200, 100)
-discount = st.sidebar.slider("Discount", 0.0, 1.0, 0.2)
-
-# Expiry Input
-if category == "Dairy":
-    days_to_expiry = st.sidebar.slider("Days to Expiry", 0.0, 10.0, 3.0)
-else:
-    days_to_expiry = st.sidebar.slider("Days to Expiry", 10.0, 40.0, 10.0)
-
+discount = round(st.sidebar.number_input("Discount (0.0 - 1.0)", 0.0, 1.0, 0.2, step=0.1), 1)
+days_to_expiry = round(st.sidebar.number_input("Days to Expiry", 0.0, 30.0, 10.0, step=0.1), 1)
 mrp = st.sidebar.number_input("Base Price (MRP ₹)", 10.0, 1000.0, 100.0)
 submit = st.sidebar.button("💡 Predict & Save")
 
 # --- Main Logic ---
 if submit:
+    is_valid, detected_state = validate_state_matches_city(city, state_name)
+    if not is_valid:
+        st.error(f"❌ City–State mismatch: '{city}' is in '{detected_state.title()}', not '{state_name}'. Please correct it.")
+        st.stop()
+
     try:
         start_day = datetime.date.today()
-
-        # Weather
         weather_df = get_openmeteo_forecast(city)
-
-        # Holidays
-        if city in ["Mumbai", "Delhi", "Bangalore"]:
-            holiday_series = get_combined_holidays(
-                api_key=INDIA_HOLIDAY_API_KEY,
-                state=state_name,
-                year=str(start_day.year),
-                start_date=start_day,
-                days=12
-            )
-        else:
-            holiday_series = pd.Series([0] * 12, index=[start_day + datetime.timedelta(days=i) for i in range(12)])
+        holiday_series = get_combined_holidays(
+            api_key=INDIA_HOLIDAY_API_KEY,
+            state=state_name,
+            year=str(start_day.year),
+            start_date=start_day,
+            days=12
+        )
 
         if len(weather_df) < 12 or len(holiday_series) < 12:
             st.error("❌ Insufficient forecast data.")
@@ -157,7 +169,6 @@ if submit:
 
         weather_df["forecast_day"] = pd.date_range(datetime.date.today(), periods=12)
 
-        # Input DF
         input_df = pd.DataFrame({
             "stock_level": [stock] * 12,
             "discount": [discount] * 12,
@@ -172,7 +183,6 @@ if submit:
         with open("model.pkl", "rb") as f:
             model = pickle.load(f)
 
-        # Features
         input_df["stock_expiry_ratio"] = input_df["stock_level"] / (input_df["days_to_expiry"] + 1)
         input_df["rain_temp_interaction"] = input_df["rain"] * input_df["temperature"]
 
@@ -180,17 +190,14 @@ if submit:
                     "stock_expiry_ratio", "rain_temp_interaction"]
 
         predicted_multipliers = model.predict(input_df[features])
+        predicted_price = np.minimum(predicted_multipliers * input_df["mrp"], input_df["mrp"])
+        min_price = 0.60 * input_df["mrp"]
 
-        min_multiplier = 0.60
-        min_price = min_multiplier * input_df["mrp"]
+        expiry_day = int(days_to_expiry)
+        valid_prices = np.maximum(predicted_price[:expiry_day], min_price[:expiry_day])
+        zero_prices = np.zeros(12 - expiry_day)
+        input_df["forecasted_price"] = np.concatenate([valid_prices, zero_prices])
 
-        if category == "Dairy":
-            forecasted = predicted_multipliers * input_df["mrp"]
-            forecasted = np.where(input_df["days_to_expiry"] > 0, forecasted, 0.0)
-        else:
-            forecasted = np.minimum(predicted_multipliers * input_df["mrp"], input_df["mrp"])
-
-        input_df["forecasted_price"] = np.maximum(forecasted, min_price)
         input_df["category"] = category
         input_df["product"] = product
 
@@ -231,6 +238,13 @@ if submit:
 
         st.success(f"✅ Forecast saved for {product} in {city} ({category})")
         st.line_chart(input_df.set_index("forecast_day")["forecasted_price"])
+        # Show next-day forecasted price
+        tomorrow = pd.to_datetime(datetime.date.today() + datetime.timedelta(days=1))
+        tomorrow_price = input_df.loc[input_df["forecast_day"] == tomorrow, "forecasted_price"].values
+
+
+        if len(tomorrow_price) > 0:
+            st.success(f"📌 Tomorrow's forecasted price for {product} is ₹{tomorrow_price[0]:.2f}")
 
     except Exception as e:
         st.error(f"❌ Error: {e}")
